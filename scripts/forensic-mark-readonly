@@ -27,12 +27,7 @@ dir() {
 }
 
 is_ro() {
-  # ASSUMPTION: Device paths can not contain spaces
-  while [ "$#" -gt 0 ]; do
-    [ "$(blockdev --getro "$1")" = "1" ] && return 0
-    shift
-  done
-  return 1
+  lsblk -nd -o ro "$@" | grep -q '1$'
 }
 
 if [ -z "${1:-}" ] ; then
@@ -63,24 +58,7 @@ trap cleanup ERR 2>/dev/null ||:
 
 base_device=$(base "${BLOCK_DEVICE}")
 if [ -n "${SYS_DIR}" ] && [ -n "${base_device}" ] ; then
-  tmp_parents="$(readlink -f "${SYS_DIR}"/*/"${base_device}")"
-  if [ -z "${tmp_parents}" ]; then
-    tmp_parents=
-    for DEV in "${SYS_DIR}"/*/holders/"${base_device}"; do
-      [ -d "$DEV" ] && tmp_parents="${tmp_parents:+${tmp_parents} }$(dir "$DEV")"
-    done
-  fi
-  # ASSUMPTION: There should be no spaces in device names.
-  parent_devices=
-  for tmp_parent in ${tmp_parents}; do
-    if [ -d "${tmp_parent}" ] ; then
-      tmp_parent=$(dir "${tmp_parent}")
-      tmp_parent=$(base "${tmp_parent}")
-      tmp_parent="/dev/${tmp_parent}"
-      parent_devices="${parent_devices:+${parent_devices} }${tmp_parent}"
-    fi
-  done
-  unset tmp_parent tmp_parents
+  parent_devices=$(lsblk -insp -o name "${BLOCK_DEVICE}" | grep '^.-' | cut -b3-)
 fi
 
 # support configuration file
